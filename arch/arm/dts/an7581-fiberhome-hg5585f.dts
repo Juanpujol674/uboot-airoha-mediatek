@@ -126,7 +126,7 @@
 };
 
 /*
- * The EVB wires a raw NAND device to the NFI block instead of the SPI-NAND
+ * The HG5585F wires a raw NAND device to the NFI block instead of the SPI-NAND
  * part, so the parallel interface is used.  &snfi keeps its default disabled
  * state from an7581.dtsi: both nodes drive the same NFI block and only one of
  * them may be enabled.
@@ -141,12 +141,13 @@
 
 		partition@0 {
 			label = "bl2";
-			reg = <0x0 0x20000>;
+			/* Match atf-airoha build.sh: OVERRIDE_UBI_START_ADDR=0x100000. */
+			reg = <0x0 0x100000>;
 		};
 
-		partition@20000 {
+		partition@100000 {
 			label = "ubi";
-			reg = <0x20000 0x000000>;
+			reg = <0x100000 0x000000>;
 		};
 	};
 };

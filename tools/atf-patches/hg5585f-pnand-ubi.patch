@@ -1,0 +1,63 @@
+--- a/plat/ecnt/en7523/bl2_boot_nand_ubi.c
++++ b/plat/ecnt/en7523/bl2_boot_nand_ubi.c
+@@ -40,6 +40,22 @@
+ extern int en7512_nand_check_block_bad(u32 offset, u32 bmt_block);
+ extern int mtk_plat_nand_setup(size_t *page_size, size_t *block_size, uint32_t *size);
+ extern void ubispl_init_scan(struct io_ubi_dev_spec *info, int fastmap);
++/* Raw NAND metadata uses the same page-wide ECC path as the FIP payload.
++ * The single-sector shortcut temporarily changes NFI/ECC geometry and shares
++ * its DMA cache with full-page reads. Avoid it on parallel NAND until that
++ * path has been validated for the board's flash/layout combination.
++ */
++static int nand_ubi_can_use_partial_read(void)
++{
++#if defined(TCSUPPORT_PARALLEL_NAND)
++	extern unsigned char _parallel_nand_mode;
++
++	return !_parallel_nand_mode;
++#else
++	return 1;
++#endif
++}
++
+ size_t page_size, block_size;
+ uint32_t nand_size;
+ 
+@@ -56,6 +72,10 @@
+ 	 * per physical erase block, so this is the single hottest spot of the
+ 	 * FIP lookup.
+ 	 */
++	if (!nand_ubi_can_use_partial_read())
++		return en7512_nand_check_block_bad(pnum * block_size,
++						   BAD_BLOCK_RAW) ? -EIO : 0;
++
+ 	ret = nandflash_read_oob((unsigned long)pnum * block_size, 1, &bbm);
+ 	if (ret) {
+ 		/*
+@@ -73,7 +93,7 @@
+ 			    unsigned long len, void *dst)
+ {
+ 	SPI_NAND_FLASH_RTN_T status = SPI_NAND_FLASH_RTN_NO_ERROR;
+-	size_t len_read;
++	uint32_t len_read = 0;
+ 	uint32_t addr;
+ 	int ret;
+ 
+@@ -85,13 +105,14 @@
+ 	 * transfers for a 64 byte VID header.  Fall back to it when the fast
+ 	 * path is not usable (SoC ECC engine) or the page is unreadable.
+ 	 */
+-	if (!nandflash_read_range(addr, len, dst))
++	if (nand_ubi_can_use_partial_read() &&
++	    !nandflash_read_range(addr, len, dst))
+ 		return 0;
+ 
+ 	ret = nandflash_read(addr, len, &len_read, dst, &status);
+ 	if (ret) {
+-		ERROR("nand_read(%" PRIu32 ") failed with %d. %zu bytes read\n",
+-		      addr, ret, len_read);
++		ERROR("nand_read(%" PRIu32 ") failed with %d (NAND status %d)\n",
++		      addr, ret, status);
+ 		return ret;
+ 	}
+ 

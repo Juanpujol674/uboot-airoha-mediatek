@@ -582,6 +582,18 @@ build_atf_source() {
 	step "Build ATF from source [${SOC_UPPER} -> ${ATF_SOC}]"
 	check_atf_tree
 
+	# HG5585F needs the BL23 fixes as well as the U-Boot layout change.
+	# Check before applying, and tolerate a previously patched sibling tree.
+	if [ "${SOC_FAMILY}:${BOARD}" = "an7581:fiberhome_hg5585f" ]; then
+		local pnand_patch="${UBOOT_DIR}/tools/atf-patches/hg5585f-pnand-ubi.patch"
+		if git -C "${ATF_DIR}" apply --check "${pnand_patch}" 2>/dev/null; then
+			git -C "${ATF_DIR}" apply "${pnand_patch}" || die "Cannot patch HG5585F ATF source."
+		elif ! git -C "${ATF_DIR}" apply --reverse --check "${pnand_patch}" 2>/dev/null; then
+			die "ATF source is incompatible with the HG5585F BL23 patch; review tools/atf-patches/hg5585f-pnand-ubi.patch."
+		fi
+		info "HG5585F: BL23 uses full-page ECC reads for parallel NAND UBI."
+	fi
+
 	( cd "${ATF_DIR}" && SOC="${ATF_SOC}" ./build.sh all ) || {
 		error "ATF build failed (see the log above)."
 		exit 1

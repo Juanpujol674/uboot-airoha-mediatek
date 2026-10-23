@@ -1,0 +1,46 @@
+name: HG5585F recovery build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fix/hg5585f-nand-boot']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout ATF source
+        uses: actions/checkout@v4
+        with:
+          repository: Yuzhii0718/atf-airoha
+          ref: 5beb2e53710234db82231e66821af17bfbec073a
+          path: atf-airoha
+      - name: Move ATF outside U-Boot clean scope
+        run: mv "$GITHUB_WORKSPACE/atf-airoha" "$GITHUB_WORKSPACE/../atf-airoha"
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
+            build-essential flex bison libssl-dev device-tree-compiler \
+            python-is-python3 qemu-user-static lzma lzma-dev unzip xz-utils nodejs npm
+      - name: Build HG5585F and patched BL23
+        env:
+          SOC: an7581
+          BOARD: fiberhome_hg5585f
+          BLOBS: source
+        run: |
+          python3 test/airoha/hg5585f-atf-smoke.py ../atf-airoha
+          ./airoha.sh
+      - name: Save recovery candidates
+        uses: actions/upload-artifact@v4
+        with:
+          name: hg5585f-recovery-candidate
+          path: |
+            output_airoha/
+            document/hg5585f-recovery.md
+            tools/atf-patches/hg5585f-pnand-ubi.patch
+          if-no-files-found: error
