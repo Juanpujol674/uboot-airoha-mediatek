@@ -34,6 +34,8 @@ with tempfile.TemporaryDirectory(prefix='hg5585f-os-') as tmp:
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <stdint.h>
+typedef uint32_t u32;
 static const char *test_board = "an7581-fiberhome-hg5585f";
 #define CONFIG_DEFAULT_DEVICE_TREE test_board
 #define CONFIG_TARGET_AN7581 1
@@ -48,6 +50,8 @@ static int fit_find_config_node(const void *fit) { return -1; }
     source += function('boot/image-fit.c', 'fit_conf_get_node') + '\n'
     source += function('arch/arm/mach-airoha/an7581/init.c',
                        'hg5585f_fixup_partitions') + '\n'
+    source += function('drivers/mtd/airoha-pnand/airoha_pnand.c',
+                       'airoha_pnand_geometry_spare').replace('static ', '', 1) + '\n'
     source += r"""
 int fixup(void *blob) { return hg5585f_fixup_partitions(blob); }
 void board(int hg) { test_board = hg ? "an7581-fiberhome-hg5585f" : "other"; }
@@ -79,6 +83,12 @@ void board(int hg) { test_board = hg ? "an7581-fiberhome-hg5585f" : "other"; }
         ptr = lib.fdt_getprop(blob, node, name.encode(), ctypes.byref(length))
         assert ptr, (path, name)
         return ctypes.string_at(ptr, length.value)
+
+    lib.airoha_pnand_geometry_spare.argtypes = [ctypes.c_uint32]
+    lib.airoha_pnand_geometry_spare.restype = ctypes.c_uint32
+    for physical, expected in [(15, 0), (16, 16), (25, 16), (26, 26),
+                               (27, 27), (28, 28), (32, 28), (64, 28)]:
+        assert lib.airoha_pnand_geometry_spare(physical) == expected
 
     for config in ['config-1', 'config@1']:
         blob = dt('/ { configurations { default = "' + config + '"; ' +

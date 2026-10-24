@@ -645,6 +645,19 @@ static const struct mtd_ooblayout_ops airoha_pnand_ooblayout = {
  *           SPI_NAND_Flash_Init() plus enable_dma().
  *------------------------------------------------------------------------------------
  */
+static u32 airoha_pnand_geometry_spare(u32 spare_per_sector)
+{
+	if (spare_per_sector >= 28)
+		return 28;
+	if (spare_per_sector >= 27)
+		return 27;
+	if (spare_per_sector >= 26)
+		return 26;
+	if (spare_per_sector >= 16)
+		return 16;
+	return 0;
+}
+
 static int airoha_pnand_setup_ecc(struct airoha_pnand_priv *priv)
 {
 	u32 sec_num, spare_size, enc_ab, dec_ab;
@@ -677,6 +690,15 @@ static int airoha_pnand_setup_ecc(struct airoha_pnand_priv *priv)
 			priv->info.soc_ecc_ability);
 		return -ENOTSUPP;
 	}
+
+	if (IS_ENABLED(CONFIG_AIROHA_PARALLEL_NAND_GEOMETRY_SPARE)) {
+		spare_size = airoha_pnand_geometry_spare(priv->info.oob_size / sec_num);
+		if (!spare_size)
+			return -ENOTSUPP;
+	}
+	dev_info(priv->dev, "NAND page format: BCH%u/512, FDM %u/%u, spare %u/sector\n",
+		 priv->info.soc_ecc_ability, AIROHA_PNAND_FDM_NUM,
+		 AIROHA_PNAND_FDM_ECC_NUM, spare_size);
 
 	/* The parity has to fit into the spare area next to the FDM bytes,
 	 * same check as the vendor auto sizing code.

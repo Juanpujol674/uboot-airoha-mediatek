@@ -2,6 +2,8 @@
 
 #include <fdtdec.h>
 #include <init.h>
+#include <stdio.h>
+#include <linux/string.h>
 #include <log.h>
 #ifdef CONFIG_OF_SYSTEM_SETUP
 #include <fdt_support.h>
@@ -204,7 +206,6 @@ int ft_system_setup(void *blob, struct bd_info *bd)
 {
 	u64 start[1] = { gd->ram_base };
 	u64 size[1] = { gd->ram_size };
-
 	int ret;
 
 	(void)bd;

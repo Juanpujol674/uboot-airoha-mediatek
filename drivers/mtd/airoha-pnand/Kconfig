@@ -51,3 +51,15 @@ config AIROHA_PARALLEL_NAND_TIMING
 	      airoha,ac-timing-rlt = <1>;
 	      airoha,ac-timing-wh = <1>;
 	      airoha,ac-timing-strobe = <1>;
+
+config AIROHA_PARALLEL_NAND_GEOMETRY_SPARE
+	bool "Select parallel NAND spare stride from physical OOB geometry"
+	depends on AIROHA_PARALLEL_NAND && TARGET_AN7581
+	help
+	  Match the pbs05 AN7581 U-Boot/ponwrt page format: choose the largest
+	  supported sector spare size within the physical NAND OOB geometry,
+	  independently of BCH strength. ECC4 with 2K pages and 128-byte OOB
+	  uses 28 spare bytes per sector instead of the vendor 16-byte stride.
+	  This changes the on-flash encoding. Existing vendor-layout UBI data
+	  requires backup and coordinated BL23/U-Boot/OS migration. Enable only
+	  with the matching ATF geometry-spare patch; do not mix old/new images.

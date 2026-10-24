@@ -11,6 +11,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [fiberhome_hg5585f, fiberhome_hg5585f_pbs]
     steps:
       - uses: actions/checkout@v4
       - name: Checkout ATF source
@@ -30,7 +34,7 @@ jobs:
       - name: Build HG5585F and patched BL23
         env:
           SOC: an7581
-          BOARD: fiberhome_hg5585f
+          BOARD: ${{ matrix.board }}
           BLOBS: source
         run: |
           python3 test/airoha/hg5585f-atf-smoke.py ../atf-airoha
@@ -39,9 +43,10 @@ jobs:
       - name: Save recovery candidates
         uses: actions/upload-artifact@v4
         with:
-          name: hg5585f-recovery-candidate
+          name: ${{ matrix.board }}-candidate
           path: |
             output_airoha/
             document/hg5585f-recovery.md
             tools/atf-patches/hg5585f-pnand-ubi.patch
+            tools/atf-patches/hg5585f-pnand-pbs-layout.patch
           if-no-files-found: error

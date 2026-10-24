@@ -584,7 +584,7 @@ build_atf_source() {
 
 	# HG5585F needs the BL23 fixes as well as the U-Boot layout change.
 	# Check before applying, and tolerate a previously patched sibling tree.
-	if [ "${SOC_FAMILY}:${BOARD}" = "an7581:fiberhome_hg5585f" ]; then
+	if [ "${SOC_FAMILY}" = "an7581" ] && { [ "${BOARD}" = "fiberhome_hg5585f" ] || [ "${BOARD}" = "fiberhome_hg5585f_pbs" ]; }; then
 		local pnand_patch="${UBOOT_DIR}/tools/atf-patches/hg5585f-pnand-ubi.patch"
 		if git -C "${ATF_DIR}" apply --check "${pnand_patch}" 2>/dev/null; then
 			git -C "${ATF_DIR}" apply "${pnand_patch}" || die "Cannot patch HG5585F ATF source."
@@ -592,6 +592,19 @@ build_atf_source() {
 			die "ATF source is incompatible with the HG5585F BL23 patch; review tools/atf-patches/hg5585f-pnand-ubi.patch."
 		fi
 		info "HG5585F: BL23 uses full-page ECC reads for parallel NAND UBI."
+	fi
+
+	# The PBS profile is a separate on-flash format, never an implicit upgrade.
+	local layout_patch="${UBOOT_DIR}/tools/atf-patches/hg5585f-pnand-pbs-layout.patch"
+	if [ "${SOC_FAMILY}:${BOARD}" = "an7581:fiberhome_hg5585f_pbs" ]; then
+		if git -C "${ATF_DIR}" apply --check "${layout_patch}" 2>/dev/null; then
+			git -C "${ATF_DIR}" apply "${layout_patch}" || die "Cannot apply PBS NAND layout patch."
+		elif ! git -C "${ATF_DIR}" apply --reverse --check "${layout_patch}" 2>/dev/null; then
+			die "ATF source is incompatible with the HG5585F PBS NAND layout patch."
+		fi
+		info "HG5585F PBS: NAND spare stride follows geometry (28 bytes/sector on S34ML02G3). Existing 16-byte UBI needs migration."
+	elif git -C "${ATF_DIR}" apply --reverse --check "${layout_patch}" 2>/dev/null; then
+		git -C "${ATF_DIR}" apply --reverse "${layout_patch}" || die "Cannot restore vendor NAND layout."
 	fi
 
 	( cd "${ATF_DIR}" && SOC="${ATF_SOC}" ./build.sh all ) || {
@@ -796,6 +809,10 @@ main() {
 	check_environment
 	configure_uboot
 	detect_build_features
+	if [ "${BOARD}" = "fiberhome_hg5585f_pbs" ] &&
+	   { [ "${BLOB_SOURCE}" != "source" ] || [ "${STAGE}" = "uboot" ]; }; then
+		die "HG5585F PBS requires a full BLOBS=source build so BL23 and U-Boot use the same NAND page format."
+	fi
 
 	# STAGE=uboot reuses the blobs staged by an earlier run.  Otherwise the
 	# ATF source (when selected) is compiled here, before build_uboot(), so the

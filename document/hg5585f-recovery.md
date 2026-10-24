@@ -138,3 +138,38 @@ other boards, repeat execution, phandle preservation and rejected layouts:
 python3 test/airoha/hg5585f-os-compat.py
 ```
 
+## Separate pbs05 page-layout candidate
+
+Build the explicit `BOARD=fiberhome_hg5585f_pbs` profile with `BLOBS=source`.
+It uses the same board DTS and environment, but enables
+`CONFIG_AIROHA_PARALLEL_NAND_GEOMETRY_SPARE`. U-Boot and the separately patched
+BL23 choose the largest supported spare stride within physical OOB geometry:
+16, 26, 27 or 28 bytes per sector. On S34ML02G300TFI00 this means BCH4/512,
+8-byte FDM protected by BCH, and **28-byte spare stride** in both stages,
+matching pbs05 U-Boot and the tested ponwrt source. BCH strength is unchanged.
+The boot log now states the exact page format.
+
+```
+SOC=an7581 BOARD=fiberhome_hg5585f_pbs BLOBS=source ./airoha.sh
+```
+
+The original `fiberhome_hg5585f` profile keeps its 16-byte BCH4 spare layout.
+Switching the shared ATF source back to it removes the PBS stride patch; smoke
+tests cover applying, repeated application and removing that patch. Prebuilt
+ATF and U-Boot-only builds are rejected for the PBS profile. CI builds both
+profiles in separate jobs and saves distinctly named candidate artifacts.
+
+**The PBS profile is not a drop-in FIP replacement for the current 16-byte UBI.**
+Do not flash the new preloader/FIP or reformat NAND based only on build success.
+The observed original-firmware backup is a set of MTD partition images plus a
+separate factory image (11 files, 248512512 bytes including that extra factory
+copy); it is not a 256 MiB NAND image with OOB. Before migration, inventory and
+back up the currently readable UBI volumes, their names/IDs/sizes and board
+calibration/identity data. Keep these private; they must not enter the Git repo.
+Prepare an off-device recovery path and a consistent new preloader/FIP/UBI plan
+before any erase. Neither this code nor the CI performs device migration.
+
+The PBS candidate corrects the confirmed stride mismatch in code. Its ability
+to initialize this board, preserve board data through migration, and boot all
+three tested firmwares still requires hardware validation. The two firmware
+images without available source may contain additional driver differences.

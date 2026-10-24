@@ -19,15 +19,20 @@ def main():
     repo = Path(__file__).resolve().parents[2]
     relative = Path('plat/ecnt/en7523/bl2_boot_nand_ubi.c')
     original = (args.atf / relative).read_bytes()
+    layout_relative = Path('plat/ecnt/common/drivers/flash/spi_nand_flash.c')
+    layout_original = (args.atf / layout_relative).read_bytes()
     script = (repo / 'airoha.sh').read_text()
     body = script.split('build_atf_source() {', 1)[1].split('\n}\n', 1)[0]
 
-    with tempfile.TemporaryDirectory(prefix='hg5585f-atf-', dir=repo.parent) as directory:
+    with tempfile.TemporaryDirectory(prefix='hg5585f-atf-', dir=repo) as directory:
         root = Path(directory)
         atf = root / 'atf'
         source = atf / relative
         source.parent.mkdir(parents=True)
         source.write_bytes(original)
+        layout_source = atf / layout_relative
+        layout_source.parent.mkdir(parents=True, exist_ok=True)
+        layout_source.write_bytes(layout_original)
         builder = atf / 'build.sh'
         builder.write_text(
             '#!/bin/sh\nset -eu\nmkdir -p output/an7581\n'
@@ -66,6 +71,25 @@ build_atf_source() {
         run()
         assert source.read_bytes() == patched, 'second build must be idempotent'
         print('PASS: patch applied, blobs staged, repeated build idempotent')
+
+        assert layout_source.read_bytes() == layout_original
+        run(board='fiberhome_hg5585f_pbs')
+        layout_patched = layout_source.read_bytes()
+        assert layout_patched != layout_original
+        assert b'spare_per_sector >= 28' in layout_patched
+        assert source.read_bytes() == patched
+        run(board='fiberhome_hg5585f_pbs')
+        assert layout_source.read_bytes() == layout_patched
+        run()
+        assert layout_source.read_bytes() == layout_original
+        print('PASS: PBS layout applied, idempotent, restored for vendor profile')
+
+        layout_source.write_text('/* incompatible layout revision */\n')
+        shutil.rmtree(blobs)
+        run(board='fiberhome_hg5585f_pbs', success=False)
+        assert not blobs.exists()
+        layout_source.write_bytes(layout_original)
+        print('PASS: incompatible PBS layout fails before build/staging')
 
         source.write_bytes(original)
         run(board='evb-pnand')

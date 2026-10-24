@@ -1,0 +1,26 @@
+--- a/plat/ecnt/common/drivers/flash/spi_nand_flash.c
++++ b/plat/ecnt/common/drivers/flash/spi_nand_flash.c
+@@ -5526,6 +5526,23 @@
+ 						_SPI_NAND_PRINTF("Error, unknow flash oob size:%u.\n", _current_flash_info_t.soc_ecc_ability);
+ 						return -1;
+ 				}
++#if defined(TCSUPPORT_PARALLEL_NAND)
++				/* Match pbs05 U-Boot/ponwrt sector stride without changing BCH.
++				 * Only used by the explicitly selected HG5585F PBS profile.
++				 */
++				if (_parallel_nand_mode) {
++					u32 spare_per_sector = _current_flash_info_t.oob_size / sec_num;
++
++					if (spare_per_sector >= 28)
++						spare_size_t = SPI_NFI_CONF_SPARE_SIZE_28BYTE;
++					else if (spare_per_sector >= 27)
++						spare_size_t = SPI_NFI_CONF_SPARE_SIZE_27BYTE;
++					else if (spare_per_sector >= 26)
++						spare_size_t = SPI_NFI_CONF_SPARE_SIZE_26BYTE;
++					else
++						spare_size_t = SPI_NFI_CONF_SPARE_SIZE_16BYTE;
++				}
++#endif
+ 			} else {
+ 				/* en7526c */
+ 				spare_size_t		= SPI_NFI_CONF_SPARE_SIZE_16BYTE;
