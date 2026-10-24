@@ -9,7 +9,7 @@ root = Path(__file__).resolve().parents[2]
 source = (root / 'drivers/mtd/airoha-pnand/airoha_pnand.c').read_text()
 
 def function(name):
-    start = source.index('static int ' + name + '(')
+    start = source.index('\nstatic int ' + name + '(') + 1
     pos = source.index('{', start) + 1
     depth = 1
     while depth:
