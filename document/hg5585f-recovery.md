@@ -81,3 +81,60 @@ a release. A successful compile does not establish NAND compatibility.
 * [Reference NAND identification table](https://github.com/pbs05/uboot-an758x/blob/main/tf-a/plat/ecnt/common/drivers/flash/parallel_nand_flash_table.c)
 * [ATF build flags](https://github.com/Yuzhii0718/atf-airoha/blob/5beb2e5371/build.sh)
 * [ATF UBI glue](https://github.com/Yuzhii0718/atf-airoha/blob/5beb2e5371/plat/ecnt/en7523/bl2_boot_nand_ubi.c)
+
+## OS boot follow-up (2026-10-24)
+
+The subsequent serial log reaches U-Boot a75ce4bf from NAND and verifies all
+three FIT image hashes. It contains two independent OS boot failures:
+
+* `Could not find configuration node 'config-1'`: the tested QWRT 5.4.302
+  and ponwrt 6.18.52 images default to `config@1`. The ponwrt 6.18.55 image
+  defaults to `config-1`. The HG5585F-only lookup alias accepts the old
+  environment's `config-1` only when that node is absent and the FIT explicitly
+  defaults to `config@1`. Existing and other explicit selections stay strict.
+* A Linux 6.18.52 session reaches `Starting kernel`, then reports ECC -74 while
+  reading both UBI volume tables, bad CRC in the factory record and a VFS root
+  mount panic. This remains an unresolved kernel/NAND interoperability issue.
+  A successful build or FIT hash check does not prove Linux can read the NAND.
+
+All three locally inspected firmware DTBs use BL2 size / UBI start `0x20000`.
+The installed BL23 and this recovery branch use `0x100000`. The OS DT fixup now
+updates just those two `reg` properties before Linux starts, preserving the
+volumes subtree, rootdisk references and phandles. It supports only the known
+HG5585F layouts on this HG5585F build, and refuses unfamiliar layouts. It does
+not migrate data or alter NAND ECC. The next serial log should report
+`HG5585F: OS NAND partitions use BL23 UBI offset 0x100000` and Linux's ubi
+partition should start at `0x000000100000`.
+
+The supplied Actions run 39948175300 built pbs05/ponwrt commit `8ef1bd9`.
+Its downstream EN7581 patch already protects 8 FDM bytes and disables the
+bad-marker swap; it must not be confused with unmodified upstream mtk_nand.
+However, it selects the largest supported spare size within the chip geometry:
+for 2048-byte pages / 128-byte OOB this is **28 bytes per 512-byte sector**.
+The current U-Boot vendor backend selects **16 bytes per sector for BCH4**.
+The pbs05 U-Boot reference driver also selects 28 bytes for this geometry.
+This is a concrete on-flash page-format mismatch despite the same BCH4 strength.
+See the [tested kernel patch](https://github.com/pbs05/ponwrt/blob/8ef1bd9/target/linux/airoha/patches-6.18/141-mtd-rawnand-mtk-add-Airoha-EN7581-support.patch)
+and [reference U-Boot driver](https://github.com/pbs05/uboot-an758x/blob/main/drivers/mtd/nand/raw/airoha_en7581_nand.c).
+
+Do not change U-Boot's encoding on the installed NAND as an isolated adjustment:
+BL23, FIP, environment and board-data volumes must remain readable by every boot
+stage. A complete remedy requires either firmware using the existing 16-byte
+layout, or a coordinated boot-stage migration with verified 16/28-byte reading
+and backups. This follow-up deliberately does not implement or claim that
+migration. It fixes the independent FIT-name and OS partition-view defects.
+
+The next necessary evidence is the firmware source/release link and a new
+serial log after the configuration/partition fixes. If ECC/volume-table
+errors remain, firmware built with a compatible AN7581 parallel-NAND driver
+is required; the two U-Boot fixes alone do not establish a working system.
+There is no justification for erasing/rebuilding UBI again at this stage.
+
+Host regression checks exercise the production FIT lookup and partition fixup
+against real libfdt, including both configuration names, explicit selection,
+other boards, repeat execution, phandle preservation and rejected layouts:
+
+```
+python3 test/airoha/hg5585f-os-compat.py
+```
+

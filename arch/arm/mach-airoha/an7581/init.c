@@ -135,12 +135,83 @@ int dram_init_banksize(void)
 }
 
 #ifdef CONFIG_OF_SYSTEM_SETUP
+/* Keep the OS view consistent with the installed HG5585F BL23/U-Boot.
+ * Update properties in place: retain the volumes subtree and its phandles.
+ * This does not move, erase or reformat any NAND contents.
+ */
+static int hg5585f_fixup_partitions(void *blob)
+{
+	int node = -1, depth = 0, ubi = -1, bl2 = -1, parent = -1, len;
+	const char *label;
+	const fdt32_t *reg;
+	fdt32_t newreg[2];
+	int ret;
+
+	if (strcmp(CONFIG_DEFAULT_DEVICE_TREE, "an7581-fiberhome-hg5585f") ||
+	    (fdt_node_check_compatible(blob, 0, "fiberhome,hg5585f-ct") &&
+	     fdt_node_check_compatible(blob, 0, "fiberhome,hg5585f-cu") &&
+	     fdt_node_check_compatible(blob, 0, "fiberhome,hg5585f")))
+		return 0;
+
+	while ((node = fdt_next_node(blob, node, &depth)) >= 0) {
+		label = fdt_getprop(blob, node, "label", &len);
+		if (label && len == sizeof("ubi") &&
+		    !memcmp(label, "ubi", sizeof("ubi"))) {
+			ubi = node;
+			parent = fdt_parent_offset(blob, node);
+			break;
+		}
+	}
+	if (ubi < 0)
+		return 0; /* e.g. a RAM recovery image without NAND partitions */
+	if (fdt_address_cells(blob, parent) != 1 ||
+	    fdt_size_cells(blob, parent) != 1)
+		return -FDT_ERR_BADNCELLS;
+	fdt_for_each_subnode(node, blob, parent) {
+		label = fdt_getprop(blob, node, "label", &len);
+		if (label && len == sizeof("bl2") &&
+		    !memcmp(label, "bl2", sizeof("bl2")))
+			bl2 = node;
+	}
+	reg = fdt_getprop(blob, ubi, "reg", &len);
+	if (!reg || len != sizeof(newreg) || bl2 < 0 ||
+	    (fdt32_to_cpu(reg[0]) != 0x20000 &&
+	     fdt32_to_cpu(reg[0]) != 0x100000))
+		return -FDT_ERR_BADVALUE;
+	/* A zero size means the remainder of the NAND in these OpenWrt DTs. */
+	if (fdt32_to_cpu(reg[1]) != 0 &&
+	    fdt32_to_cpu(reg[1]) != 0x10000000 - fdt32_to_cpu(reg[0]))
+		return -FDT_ERR_BADVALUE;
+	newreg[0] = cpu_to_fdt32(0x100000);
+	newreg[1] = reg[1] ? cpu_to_fdt32(0xff00000) : 0;
+	reg = fdt_getprop(blob, bl2, "reg", &len);
+	if (!reg || len != sizeof(newreg) || fdt32_to_cpu(reg[0]) ||
+	    (fdt32_to_cpu(reg[1]) != 0x20000 &&
+	     fdt32_to_cpu(reg[1]) != 0x100000))
+		return -FDT_ERR_BADVALUE;
+	ret = fdt_setprop_inplace(blob, ubi, "reg", newreg, sizeof(newreg));
+	if (ret)
+		return ret;
+	newreg[0] = 0;
+	newreg[1] = cpu_to_fdt32(0x100000);
+	ret = fdt_setprop_inplace(blob, bl2, "reg", newreg, sizeof(newreg));
+	if (!ret)
+		printf("HG5585F: OS NAND partitions use BL23 UBI offset 0x100000\n");
+	return ret;
+}
+
 int ft_system_setup(void *blob, struct bd_info *bd)
 {
 	u64 start[1] = { gd->ram_base };
 	u64 size[1] = { gd->ram_size };
 
+	int ret;
+
 	(void)bd;
+
+	ret = hg5585f_fixup_partitions(blob);
+	if (ret)
+		return ret;
 
 	/* Publish the detected size, the DT one may be wrong or missing. */
 	return fdt_fixup_memory_banks(blob, start, size, 1);

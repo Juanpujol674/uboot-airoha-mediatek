@@ -1943,6 +1943,22 @@ int fit_conf_get_node(const void *fit, const char *conf_uname)
 	}
 
 	noffset = fdt_subnode_offset(fit, confs_noffset, conf_uname);
+#if !defined(USE_HOSTCC) && defined(CONFIG_TARGET_AN7581)
+	/* Older HG5585F environments explicitly select config-1, while some
+	 * OpenWrt builds call the same default configuration config@1. Keep
+	 * explicit selections strict except for this known legacy spelling.
+	 */
+	if (noffset == -FDT_ERR_NOTFOUND &&
+	    !strcmp(CONFIG_DEFAULT_DEVICE_TREE, "an7581-fiberhome-hg5585f") &&
+	    !strcmp(conf_uname, "config-1")) {
+		const char *def = fdt_getprop(fit, confs_noffset,
+					      FIT_DEFAULT_PROP, &len);
+
+		if (def && len == sizeof("config@1") &&
+		    !memcmp(def, "config@1", sizeof("config@1")))
+			noffset = fdt_subnode_offset(fit, confs_noffset, def);
+	}
+#endif
 	if (noffset < 0) {
 		debug("Can't get node offset for configuration unit name: '%s' (%s)\n",
 		      conf_uname, fdt_strerror(noffset));

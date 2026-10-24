@@ -25,7 +25,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
-            build-essential flex bison libssl-dev device-tree-compiler \
+            build-essential flex bison libssl-dev libfdt-dev device-tree-compiler \
             python-is-python3 qemu-user-static lzma lzma-dev unzip xz-utils nodejs npm
       - name: Build HG5585F and patched BL23
         env:
@@ -34,6 +34,7 @@ jobs:
           BLOBS: source
         run: |
           python3 test/airoha/hg5585f-atf-smoke.py ../atf-airoha
+          python3 test/airoha/hg5585f-os-compat.py
           ./airoha.sh
       - name: Save recovery candidates
         uses: actions/upload-artifact@v4
