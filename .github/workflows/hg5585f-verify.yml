@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        board: [fiberhome_hg5585f, fiberhome_hg5585f_pbs]
+        board: [fiberhome_hg5585f, fiberhome_hg5585f_pbs, fiberhome_hg5585f_pbs_ramdiag]
     steps:
       - uses: actions/checkout@v4
       - name: Checkout ATF source
@@ -39,7 +39,12 @@ jobs:
         run: |
           python3 test/airoha/hg5585f-atf-smoke.py ../atf-airoha
           python3 test/airoha/hg5585f-os-compat.py
+          python3 test/airoha/hg5585f-readonly.py
           ./airoha.sh
+          if [ "$BOARD" = fiberhome_hg5585f_pbs_ramdiag ]; then
+            python3 test/airoha/hg5585f-readonly.py --config .config
+            find output_airoha -type f -name "*preloader*" -delete
+          fi
       - name: Save recovery candidates
         uses: actions/upload-artifact@v4
         with:

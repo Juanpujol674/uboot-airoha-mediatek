@@ -584,7 +584,7 @@ build_atf_source() {
 
 	# HG5585F needs the BL23 fixes as well as the U-Boot layout change.
 	# Check before applying, and tolerate a previously patched sibling tree.
-	if [ "${SOC_FAMILY}" = "an7581" ] && { [ "${BOARD}" = "fiberhome_hg5585f" ] || [ "${BOARD}" = "fiberhome_hg5585f_pbs" ]; }; then
+	if [ "${SOC_FAMILY}" = "an7581" ] && { [ "${BOARD}" = "fiberhome_hg5585f" ] || { [ "${BOARD}" = "fiberhome_hg5585f_pbs" ] || [ "${BOARD}" = "fiberhome_hg5585f_pbs_ramdiag" ]; }; }; then
 		local pnand_patch="${UBOOT_DIR}/tools/atf-patches/hg5585f-pnand-ubi.patch"
 		if git -C "${ATF_DIR}" apply --check "${pnand_patch}" 2>/dev/null; then
 			git -C "${ATF_DIR}" apply "${pnand_patch}" || die "Cannot patch HG5585F ATF source."
@@ -596,7 +596,7 @@ build_atf_source() {
 
 	# The PBS profile is a separate on-flash format, never an implicit upgrade.
 	local layout_patch="${UBOOT_DIR}/tools/atf-patches/hg5585f-pnand-pbs-layout.patch"
-	if [ "${SOC_FAMILY}:${BOARD}" = "an7581:fiberhome_hg5585f_pbs" ]; then
+	if [ "${SOC_FAMILY}" = "an7581" ] && { [ "${BOARD}" = "fiberhome_hg5585f_pbs" ] || [ "${BOARD}" = "fiberhome_hg5585f_pbs_ramdiag" ]; }; then
 		if git -C "${ATF_DIR}" apply --check "${layout_patch}" 2>/dev/null; then
 			git -C "${ATF_DIR}" apply "${layout_patch}" || die "Cannot apply PBS NAND layout patch."
 		elif ! git -C "${ATF_DIR}" apply --reverse --check "${layout_patch}" 2>/dev/null; then
@@ -809,7 +809,7 @@ main() {
 	check_environment
 	configure_uboot
 	detect_build_features
-	if [ "${BOARD}" = "fiberhome_hg5585f_pbs" ] &&
+	if { [ "${BOARD}" = "fiberhome_hg5585f_pbs" ] || [ "${BOARD}" = "fiberhome_hg5585f_pbs_ramdiag" ]; } &&
 	   { [ "${BLOB_SOURCE}" != "source" ] || [ "${STAGE}" = "uboot" ]; }; then
 		die "HG5585F PBS requires a full BLOBS=source build so BL23 and U-Boot use the same NAND page format."
 	fi

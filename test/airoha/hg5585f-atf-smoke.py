@@ -83,6 +83,12 @@ build_atf_source() {
         run()
         assert layout_source.read_bytes() == layout_original
         print('PASS: PBS layout applied, idempotent, restored for vendor profile')
+        run(board='fiberhome_hg5585f_pbs_ramdiag')
+        assert layout_source.read_bytes() == layout_patched
+        assert source.read_bytes() == patched
+        run()
+        assert layout_source.read_bytes() == layout_original
+        print('PASS: RAM diagnostic uses the same paired ATF patches')
 
         layout_source.write_text('/* incompatible layout revision */\n')
         shutil.rmtree(blobs)

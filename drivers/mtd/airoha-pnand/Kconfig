@@ -63,3 +63,11 @@ config AIROHA_PARALLEL_NAND_GEOMETRY_SPARE
 	  This changes the on-flash encoding. Existing vendor-layout UBI data
 	  requires backup and coordinated BL23/U-Boot/OS migration. Enable only
 	  with the matching ATF geometry-spare patch; do not mix old/new images.
+
+config AIROHA_PARALLEL_NAND_READ_ONLY
+	bool "Disable parallel NAND programming and erase (RAM diagnostics)"
+	depends on AIROHA_PARALLEL_NAND
+	help
+	  Reject page programming and block erase at the driver primitives,
+	  including OOB writes and bad-block marking. Intended for RAM-loaded
+	  diagnostics, not installation or recovery writes.

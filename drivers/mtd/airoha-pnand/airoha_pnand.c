@@ -234,6 +234,9 @@ static int airoha_pnand_read_page(struct airoha_pnand_priv *priv, u32 page,
 static int airoha_pnand_write_page(struct airoha_pnand_priv *priv, u32 page,
 				   const u8 *data, u8 *oob)
 {
+	if (IS_ENABLED(CONFIG_AIROHA_PARALLEL_NAND_READ_ONLY))
+		return -EROFS;
+
 	if (parallel_nand_dma_write(0, page, (unsigned long *)priv->pagebuf,
 				    priv->fdm_bytes, oob) !=
 	    SPI_NAND_FLASH_RTN_NO_ERROR) {
@@ -252,6 +255,9 @@ static int airoha_pnand_write_page(struct airoha_pnand_priv *priv, u32 page,
  */
 static int airoha_pnand_erase_block(struct airoha_pnand_priv *priv, loff_t block)
 {
+	if (IS_ENABLED(CONFIG_AIROHA_PARALLEL_NAND_READ_ONLY))
+		return -EROFS;
+
 	if (parallel_nand_erase(block / priv->info.page_size) !=
 	    SPI_NAND_FLASH_RTN_NO_ERROR) {
 		pr_err("airoha_pnand: block 0x%llx erase failed\n", block);
@@ -1102,6 +1108,10 @@ static int airoha_pnand_probe(struct udevice *dev)
 	mtd->priv = priv;
 	mtd->type = MTD_NANDFLASH;
 	mtd->flags = MTD_CAP_NANDFLASH;
+	if (IS_ENABLED(CONFIG_AIROHA_PARALLEL_NAND_READ_ONLY)) {
+		mtd->flags &= ~MTD_WRITEABLE;
+		puts("HG5585F RAM diagnostic: NAND program/erase disabled\n");
+	}
 
 	mtd->size = priv->info.device_size;
 	mtd->erasesize = priv->info.erase_size;

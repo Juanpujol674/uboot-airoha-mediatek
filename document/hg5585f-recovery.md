@@ -173,3 +173,37 @@ The PBS candidate corrects the confirmed stride mismatch in code. Its ability
 to initialize this board, preserve board data through migration, and boot all
 three tested firmwares still requires hardware validation. The two firmware
 images without available source may contain additional driver differences.
+
+## RAM-only diagnostic profile (not an installer)
+
+`BOARD=fiberhome_hg5585f_pbs_ramdiag` uses the PBS page geometry, but keeps its
+environment only in RAM, disables automatic boot and UBI/Web recovery, and
+rejects page programming and block erase inside the parallel NAND driver.
+MTD also advertises the device as read-only. OOB writes and bad-block marking
+share the guarded primitives. Tests execute those actual functions against
+stubbed hardware and assert that no write/erase call reaches the hardware.
+CI checks the resolved configuration, not just the input defconfig.
+
+Load ONLY its `*-bl31-uboot*.fip` through the EXISTING preloader's XMODEM
+recovery prompt. Do not flash it, and do not install a diagnostic preloader.
+CI deliberately excludes the diagnostic preloader from the artifact.
+The existing preloader remains responsible for DRAM and the serial transfer.
+At the console run only `version`, `mtd list`, and optionally `ping` to a PC
+on the same Ethernet subnet. Capture the complete serial log. Power cycling
+returns to the installed boot chain. Do not boot Linux or invoke raw register
+writes: the U-Boot driver guards cannot constrain another operating system
+or arbitrary code. This is diagnostic protection, not a security boundary.
+
+This first test checks entry into U-Boot, NAND identification/selected format,
+and Ethernet. It cannot prove that the new BL23 can cold-boot the NAND, or
+that Linux can mount a newly written 28-byte UBI. Existing 16-byte content is
+not expected to decode using the new 28-byte layout. No migration commands
+are provided until those separate write/recovery assumptions are validated.
+
+The supplied `factory-1m.bin` is a converted board-data image, not a native
+1 MiB stock partition. pbs05/fiberhome-factory defines this 1 MiB format;
+ponwrt documents restoring it to the `factory` UBI volume. A 1 MiB dynamic
+volume rounds up to nine 126976-byte LEBs (1142784 bytes); that capacity does
+not by itself imply missing board data or require altering the 1 MiB file.
+Source: https://github.com/pbs05/fiberhome-factory and
+https://github.com/pbs05/ponwrt/blob/master/README_zh.md
